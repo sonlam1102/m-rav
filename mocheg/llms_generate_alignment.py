@@ -62,7 +62,7 @@ def load_peft_model_vision(peft_model_name, device="auto", flash_attention=True)
         model_max_length=2000,
         padding_side="left",
         truncation_side="left",
-        token="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",
+        token="",
     )
 
     quantization_config = BitsAndBytesConfig(
@@ -78,7 +78,7 @@ def load_peft_model_vision(peft_model_name, device="auto", flash_attention=True)
     model = MllamaForConditionalGeneration.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         attn_implementation=atten_type,
     )

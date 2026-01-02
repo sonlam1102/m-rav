@@ -22,7 +22,7 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
         model_max_length=2048,
         padding_side="left",
         truncation_side="left",
-        token="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"
+        token=""
     )
 
     quantization_config = BitsAndBytesConfig(
@@ -39,14 +39,14 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
         model = AutoModelForCausalLM.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )
     else:
         model = AutoModelForCausalLM.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )

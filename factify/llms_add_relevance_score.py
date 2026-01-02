@@ -8,7 +8,7 @@ from PIL import Image
 from tqdm import tqdm, trange
 import json
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
-# from llm2vec import LLM2Vec
+from llm2vec import LLM2Vec
 
 import logging
 logging.disable(logging.WARNING)
@@ -54,8 +54,7 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
 def load_peft_model_vision2(peft_model_name, device="auto", quantile=True, flash_attention=True):
     processor = AutoProcessor.from_pretrained(
         peft_model_name,
-        token="",
-        model_max_length=1024
+        token=""
     )
 
     quantization_config = BitsAndBytesConfig(
@@ -93,7 +92,8 @@ def load_peft_model_vision3(peft_model_name, device="auto", quantile=True, flash
     processor = LlavaNextProcessor.from_pretrained(
         peft_model_name,
         token="",
-        image_token=image_token,
+        padding_side="left",
+        image_token=image_token
     )
     processor.tokenizer.padding_side = "left"
 
@@ -104,24 +104,61 @@ def load_peft_model_vision3(peft_model_name, device="auto", quantile=True, flash
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
         load_in_4bit=True,
-        load_in_8bit=False
+        load_in_8bit=False,
     )
-    
-    atten_type = "flash_attention_2" if flash_attention else "eager" 
+
     if quantile:
         model = LlavaNextForConditionalGeneration.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
         token="",
         device_map=device,
-        attn_implementation=atten_type,
+        use_flash_attention_2=flash_attention,
     )
     else:
         model = LlavaNextForConditionalGeneration.from_pretrained(
         peft_model_name,
         token="",
         device_map=device,
-        attn_implementation=atten_type,
+        use_flash_attention_2=flash_attention,
+    )
+
+    return processor, model
+
+
+def load_peft_model_vision4(peft_model_name, device="auto", quantile=True, flash_attention=True, image_token="<image>"):
+    processor = AutoProcessor.from_pretrained(
+        peft_model_name,
+        token="",
+        padding_side="left",
+        image_token=image_token
+    )
+    processor.tokenizer.padding_side = "left"
+
+    quantization_config = BitsAndBytesConfig(
+        llm_int8_threshold=6.0,
+        llm_int8_has_fp16_weight=False,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        load_in_4bit=True,
+        load_in_8bit=False,
+    )
+
+    if quantile:
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+        peft_model_name,
+        quantization_config=quantization_config,
+        token="",
+        device_map=device,
+        use_flash_attention_2=flash_attention,
+    )
+    else:
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+        peft_model_name,
+        token="",
+        device_map=device,
+        use_flash_attention_2=flash_attention,
     )
 
     return processor, model
@@ -147,7 +184,7 @@ def do_inference_vision(model, processor, prompt, images, new_token=10):
     for img in images:
         temp = Image.open(img)
         keep = temp.copy()
-        image_data.append(keep.resize((keep.width // 3, keep.height // 3), Image.LANCZOS))
+        image_data.append(keep.resize((keep.width // 2, keep.height // 2), Image.LANCZOS))
         temp.close()
                           
     if len(image_data) > 0:
@@ -161,6 +198,7 @@ def do_inference_vision(model, processor, prompt, images, new_token=10):
         **inputs,
         max_new_tokens=new_token,
         do_sample=False,
+        pad_token_id=processor.tokenizer.pad_token_id,
     )
     return processor.decode(output_ids[0])
 
@@ -202,17 +240,17 @@ def read_augmented_data(data):
 def retrieve_verification_results(data):
     def filter_results(response):
         response = response.split("<RESPONSE>")[-1]
-        if ("true" in response or "True" in response) and "not true" not in response:
-            return "true"
-        elif ("false" in response or "False" in response) or "not true" in response:
-            return "false"
+        if ("supported" in response or "Supported" in response) and "not supported" not in response:
+            return "supported"
+        elif ("refuted" in response or "Refuted" in response) or "not supported" in response:
+            return "refuted"
         else:
             return "NEI"
 
     label2inx = {
-        "true": 2,
+        "supported": 2,
         "NEI": 1,
-        "false": 0
+        "refuted": 0
     }
 
     ground_truth = []
@@ -226,30 +264,12 @@ def retrieve_verification_results(data):
 
 
 def make_verification_prompt(claim, text_evidence, image_guides, path):
-    # def make_image_description_evidence(image_explaination):
-    #     image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-    #     image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-    #     image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-    #     expl = image_explaination.split("<EXPLANATION>")[-1]
-    #     expl = expl.replace("<FINAL ANSWER>:", "")
-    #     expl = expl.replace("     ", " ")
-    #     expl = expl.replace("\n", "")
-    #     expl = expl.replace(": ", "")
-
-    #     hyp = image_explaination.split("<EXPLANATION>")[0]
-    #     hyp = hyp.replace("\n", "")
-    #     hyp = hyp.replace("<HYPOTHESIS>:", "")
-    #     # hyp = "Not consistent" if "is not consistent" in hyp else "Consistent"
-    #     return expl, hyp
-
     def make_image_description_evidence(image_explaination):
-        image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-        image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-        image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-        expl = image_explaination.split("<EXPLANATION>: ")[-1]
-        expl = expl.split("<FINAL ANSWER>: ")[-1]
+        expl = image_explaination.split("<EXPLANATION>")[-1]
+        expl = expl.replace("<FINAL ANSWER>:", "")
+        expl = expl.replace("     ", " ")
+        expl = expl.replace("\n", "")
+        expl = expl.replace(": ", "")
 
         hyp = image_explaination.split("<EXPLANATION>")[0]
         hyp = hyp.replace("\n", "")
@@ -283,10 +303,10 @@ def make_verification_prompt(claim, text_evidence, image_guides, path):
             {img_guides}
 
         To verify the truthfulness of the claim, please following these steps:
-        STEP 1: Reasoning the relevance between the claim and each given evidence based on the inner consistency between each evidence.
-        STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is true or false, it may be not enough information.
+        STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
+        STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is supported or refuted, it may be not enough information.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <RESPONSE>: 
         """
         # prompt = [
@@ -318,10 +338,10 @@ def make_verification_prompt(claim, text_evidence, image_guides, path):
             {evidences}
         
         To verify the truthfulness of the claim, please following these steps:
-        STEP 1: Reasoning the relevance between the claim and each given evidence based on the inner consistency between each evidence.
-        STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is true or false, it may be not enough information.
+        STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
+        STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is supported or refuted, it may be not enough information.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <RESPONSE>:
         """
         # prompt = [
@@ -357,7 +377,7 @@ def make_verification_prompt_no_aug(claim, text_evidence):
         STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
         STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is supported or refuted, it may be not enough information.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <RESPONSE>:
         """
     # print(prompt)
@@ -370,34 +390,16 @@ def make_verification_prompt_with_image(claim, text_evidence, image_guides, path
         name = img_p.split('/')[-1]
         return path + "/" + name
     
-    # def make_image_description_evidence(image_explaination):
-    #     image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-    #     image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-    #     image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-    #     expl = image_explaination.split("<EXPLANATION>")[-1]
-    #     expl = expl.replace("<FINAL ANSWER>:", "")
-    #     expl = expl.replace("     ", " ")
-    #     expl = expl.replace("\n", "")
-    #     expl = expl.replace(": ", "")
-
-    #     hyp = image_explaination.split("<EXPLANATION>")[0]
-    #     hyp = hyp.replace("\n", "")
-    #     hyp = hyp.replace("<HYPOTHESIS>:", "")
-    #     return expl, hyp
-
     def make_image_description_evidence(image_explaination):
-        image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-        image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-        image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-        expl = image_explaination.split("<EXPLANATION>: ")[-1]
-        expl = expl.split("<FINAL ANSWER>: ")[-1]
+        expl = image_explaination.split("<EXPLANATION>")[-1]
+        expl = expl.replace("<FINAL ANSWER>:", "")
+        expl = expl.replace("     ", " ")
+        expl = expl.replace("\n", "")
+        expl = expl.replace(": ", "")
 
         hyp = image_explaination.split("<EXPLANATION>")[0]
         hyp = hyp.replace("\n", "")
         hyp = hyp.replace("<HYPOTHESIS>:", "")
-        # hyp = "Not consistent" if "is not consistent" in hyp else "Consistent"
         return expl, hyp
     
     lst_images = []
@@ -426,11 +428,10 @@ def make_verification_prompt_with_image(claim, text_evidence, image_guides, path
         STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
         STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <RESPONSE>: 
         """
         # print(prompt)
-        # print(lst_images)
         # raise Exception
     else:
         evidences = ""
@@ -451,7 +452,7 @@ def make_verification_prompt_with_image(claim, text_evidence, image_guides, path
         STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
         STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <image>
         <RESPONSE>:
         """
@@ -466,32 +467,23 @@ def make_verification_prompt_with_image_no_aug(claim, text_evidence, image_evide
         return path + "/" + name
     
     lst_images = []
-
-    # Filter corrupted images (not found in the images_new folders)
-    new_image_evidence = []
-    for ime in image_evidence:
-        try:
-            Image.open(ime)
-            new_image_evidence.append(ime)
-        except Exception as e:
-            # print(ime)
-            pass
-    # end 
-    
-    image_evidence = new_image_evidence
-
-    if len(image_evidence) > 0:
+    try:
+        Image.open(image_evidence)
         evidence_guides = ""
         for t in text_evidence:
             evidence_guides += f"""
                 Text: {t}
             """
 
-        for im in image_evidence:
-            evidence_guides += f"""
-                Image: <image>
-            """
-            lst_images.append(get_image_path_new(im, path))          
+        # for im in image_evidence:
+        #     evidence_guides += f"""
+        #         Image: <image>
+        #     """
+        #     lst_images.append(get_image_path_new(im, path))
+        evidence_guides += f"""
+            Image: <image>
+        """
+        lst_images.append(get_image_path_new(image_evidence, path))          
         
         prompt = f"""
         Is it true that: {claim}?
@@ -502,13 +494,13 @@ def make_verification_prompt_with_image_no_aug(claim, text_evidence, image_evide
         STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
         STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence.
 
-        The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+        The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
         <RESPONSE>: 
         """
         # print(lst_images)
         # print(prompt)
         # raise Exception
-    else:
+    except Exception as e:
         evidences = ""
         for t in text_evidence:
             evidences += f"""
@@ -523,12 +515,66 @@ def make_verification_prompt_with_image_no_aug(claim, text_evidence, image_evide
             STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
             STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is supported or refuted, it may be not enough information.
 
-            The truthfulness must be only one of three value: true, false, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim.
+            The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim.
             <image> 
             <RESPONSE>:
             """
         # print(prompt)
         # raise Exception
+
+    # if len(image_evidence) > 0:
+    #     evidence_guides = ""
+    #     for t in text_evidence:
+    #         evidence_guides += f"""
+    #             Text: {t}
+    #         """
+
+    #     # for im in image_evidence:
+    #     #     evidence_guides += f"""
+    #     #         Image: <image>
+    #     #     """
+    #     #     lst_images.append(get_image_path_new(im, path))
+    #     evidence_guides += f"""
+    #         Image: <image>
+    #     """
+    #     lst_images.append(get_image_path_new(image_evidence, path))          
+        
+    #     prompt = f"""
+    #     Is it true that: {claim}?
+    #     Here are the evidence for checking: 
+    #         {evidence_guides}
+
+    #     To verify the truthfulness of the claim, please following these steps:
+    #     STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
+    #     STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence.
+
+    #     The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim. 
+    #     <RESPONSE>: 
+    #     """
+    #     # print(lst_images)
+    #     # print(prompt)
+    #     # raise Exception
+    # else:
+    #     evidences = ""
+    #     for t in text_evidence:
+    #         evidences += f"""
+    #             Text: {t}
+    #             """
+    #     prompt = f"""
+    #         Is it true that: {claim}?
+    #         The evidence: 
+    #             {evidences}
+            
+    #         To verify the truthfulness of the claim, please following these steps:
+    #         STEP 1: Consult the relevance between the claim and each given evidence based on the relevance score.
+    #         STEP 2: Think and conclude the truthfulness of the claim based on the relevance and logical of the evidence. If the evidence does not help concluding the claim is supported or refuted, it may be not enough information.
+
+    #         The truthfulness must be only one of three value: supported, refuted, or not enough information. Please think step-by-step carefully and response only the truthfulness of the claim.
+    #         <image> 
+    #         <RESPONSE>:
+    #         """
+    #     # print(prompt)
+    #     # raise Exception
     return prompt, lst_images
 
 
@@ -537,7 +583,6 @@ def create_verification_prompt(dataset, model, processor, path, new_token=10, no
     new_dataset = read_augmented_data(dataset)
     print("---performing verification .....----")
     for sample in tqdm(new_dataset):
-        # prompt = make_verification_prompt(sample['claim'], sample['text_evidence_new'], sample['alignment'], path)
         if not no_aug:
             prompt = make_verification_prompt(sample['claim'], sample['text_evidence_new'], sample['alignment'], path)
         else:
@@ -555,7 +600,7 @@ def create_verification_prompt(dataset, model, processor, path, new_token=10, no
             print(sample['claim_id'])
             results.append({
                 **sample,
-                'results': "This claim is true"
+                'results': "This claim is supported"
             })
     return results
 
@@ -579,7 +624,7 @@ def create_verification_prompt_vision_text_only(dataset, model, processor, path,
             print(sample['claim_id'])
             results.append({
                 **sample,
-                'results': "This claim is true"
+                'results': "This claim is supported"
             })
     return results
 
@@ -607,7 +652,7 @@ def create_verification_prompt_vision_multiimages(dataset, model, processor, pat
             print(sample['claim_id'])
             results.append({
                 **sample,
-                'results': "This claim is true"
+                'results': "This claim is supported"
             })
     return results
 
@@ -659,41 +704,22 @@ def llm_relevant(model, claim, text, image):
 
 
 def integrate_relevant_score(dataset, l2v):
-    # def make_image_description_evidence(image_explaination):
-    #     image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-    #     image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-    #     image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-    #     expl = image_explaination.split("<EXPLANATION>")[-1]
-    #     expl = expl.replace("<FINAL ANSWER>:", "")
-    #     expl = expl.replace("     ", " ")
-    #     expl = expl.replace("\n", "")
-    #     expl = expl.replace(": ", "")
-
-    #     hyp = image_explaination.split("<EXPLANATION>")[0]
-    #     hyp = hyp.replace("\n", "")
-    #     hyp = hyp.replace("<HYPOTHESIS>:", "")
-    #     return expl, hyp
-
     def make_image_description_evidence(image_explaination):
-        image_explaination = image_explaination.replace("**FINAL ANSWER:**", "<FINAL ANSWER>:")
-        image_explaination = image_explaination.replace("**HYPOTHESIS:**", "<HYPOTHESIS>:")
-        image_explaination = image_explaination.replace("**EXPLANATION:**", "<EXPLANATION>:")
-
-        expl = image_explaination.split("<EXPLANATION>: ")[-1]
-        expl = expl.split("<FINAL ANSWER>: ")[-1]
+        expl = image_explaination.split("<EXPLANATION>")[-1]
+        expl = expl.replace("<FINAL ANSWER>:", "")
+        expl = expl.replace("     ", " ")
+        expl = expl.replace("\n", "")
+        expl = expl.replace(": ", "")
 
         hyp = image_explaination.split("<EXPLANATION>")[0]
         hyp = hyp.replace("\n", "")
         hyp = hyp.replace("<HYPOTHESIS>:", "")
-        # hyp = "Not consistent" if "is not consistent" in hyp else "Consistent"
         return expl, hyp
 
     new_dataset = read_augmented_data(dataset)
 
     for sample in tqdm(new_dataset):
-        claim_text = sample['claim']
-
+        claim = sample['claim']
         text_evidence = sample['text_evidence']
         align_image = sample['alignment']
 
@@ -701,12 +727,12 @@ def integrate_relevant_score(dataset, l2v):
 
         if len(align_image) > 0:
             for im in align_image:
-                rel_score, rel_deg = llm_relevant(l2v, claim_text, im['text'], make_image_description_evidence(im['clean_alignment'])[0])
+                rel_score, rel_deg = llm_relevant(l2v, claim, im['text'], make_image_description_evidence(im['clean_alignment'])[0])
                 im['relevance_score'] = rel_score
                 im['relevance_deg'] = rel_deg
         else:
             for t in text_evidence:
-                rel_score, rel_deg = llm_relevant(l2v, claim_text, t, None)
+                rel_score, rel_deg = llm_relevant(l2v, claim, t, None)
                 text_evidence_new.append({
                     "text": t,
                     "relevance_score": rel_score,
@@ -720,70 +746,18 @@ def integrate_relevant_score(dataset, l2v):
 
 if __name__ == '__main__':
     args = parser_args()
-    processor, model = load_peft_model_text("meta-llama/Llama-3.1-70B-Instruct", flash_attention=True)
-    # processor, model = load_peft_model_text("meta-llama/Llama-3.1-8B-Instruct", flash_attention=True)
-    # processor, model = load_peft_model_text("mistralai/Mixtral-8x7B-Instruct-v0.1", flash_attention=True)
-    # processor, model = load_peft_model_text("meta-llama/Llama-3.2-3B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-14B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-32B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-72B-Instruct")
-
-    # processor, model = load_peft_model_vision3("llava-hf/llava-v1.6-vicuna-7b-hf", flash_attention=True)
-    # processor, model = load_peft_model_vision3("llava-hf/llava-v1.6-vicuna-13b-hf", flash_attention=False)
-    # processor, model = load_peft_model_vision3("/SSD_data1/huggingface_models/llava-v1.6-vicuna-13b-hf", flash_attention=True)
-
-    with open("./result_dump/finfact_claim_new.json", "r") as f:
+    with open("./factify_claim_llama3.2_test_new.json", "r") as f:
         dataset = json.load(f)
     f.close()
 
-    ###  intergrate relevance
-    # l2v = LLM2Vec.from_pretrained(
-    #     "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
-    #     peft_model_name_or_path="McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
-    #     device_map="auto",
-    #     torch_dtype=torch.bfloat16
-    # )
+    l2v = LLM2Vec.from_pretrained(
+        "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+        peft_model_name_or_path="McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+    )
 
-    # with open("./finfact_claim_llama3.2_full_0-300.json", "r") as f:
-    #     data1 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_300-1000.json", "r") as f:
-    #     data2 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_1000-3000.json", "r") as f:
-    #     data3 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_3000-3369.json", "r") as f:
-    #     data4 = json.load(f)
-    # f.close()
-
-    # dataset = data1 + data2 + data3 + data4
-    # new_data = integrate_relevant_score(dataset, l2v)
-    # with open('./finfact_claim_new.json', 'w', encoding='utf-8') as f:
-    #     json.dump(new_data, f, ensure_ascii=False, indent=4)
-    # f.close()
-
-    # MAIN
-    # train
-    # results = create_verification_prompt(dataset, model, processor, args.path, new_token=20, no_aug=True)
-    # results = create_verification_prompt_vision_text_only(dataset, model, processor, args.path, new_token=20)
-    results = create_verification_prompt_vision_multiimages(dataset, model, processor, args.path, new_token=10, no_aug=False)
-    g, p, new_results = retrieve_verification_results(results)
-
-    with open('./finfact_verification_test_llava13.json', 'w', encoding='utf-8') as f:
-        json.dump(new_results, f, ensure_ascii=False, indent=4)
+    new_data = integrate_relevant_score(dataset, l2v)
+    with open('./factify_claim_llama3.2_test_new.json', 'w', encoding='utf-8') as f:
+        json.dump(new_data, f, ensure_ascii=False, indent=4)
     f.close()
-
-    # # testing 
-    # with open("./mocheg_verification_test_llama3.1-70B.json", "r") as f:
-    #     results = json.load(f)
-    # f.close()
-    # g, p, new_results = retrieve_verification_results(results)
-
-    print("Test result micro: {}\n".format(f1_score(g, p, average='micro')))
-    print("Test result macro: {}\n".format(f1_score(g, p, average='macro')))
-    print("Test result Accuracy: {}\n".format(accuracy_score(g, p)))
-    print(confusion_matrix(g, p, labels=[0, 1, 2]))

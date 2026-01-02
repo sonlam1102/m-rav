@@ -8,7 +8,7 @@ from PIL import Image
 from tqdm import tqdm, trange
 import json
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
-# from llm2vec import LLM2Vec
+from llm2vec import LLM2Vec
 
 import logging
 logging.disable(logging.WARNING)
@@ -720,70 +720,20 @@ def integrate_relevant_score(dataset, l2v):
 
 if __name__ == '__main__':
     args = parser_args()
-    processor, model = load_peft_model_text("meta-llama/Llama-3.1-70B-Instruct", flash_attention=True)
-    # processor, model = load_peft_model_text("meta-llama/Llama-3.1-8B-Instruct", flash_attention=True)
-    # processor, model = load_peft_model_text("mistralai/Mixtral-8x7B-Instruct-v0.1", flash_attention=True)
-    # processor, model = load_peft_model_text("meta-llama/Llama-3.2-3B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-14B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-32B-Instruct")
-    # processor, model = load_peft_model_text("Qwen/Qwen2.5-72B-Instruct")
-
-    # processor, model = load_peft_model_vision3("llava-hf/llava-v1.6-vicuna-7b-hf", flash_attention=True)
-    # processor, model = load_peft_model_vision3("llava-hf/llava-v1.6-vicuna-13b-hf", flash_attention=False)
-    # processor, model = load_peft_model_vision3("/SSD_data1/huggingface_models/llava-v1.6-vicuna-13b-hf", flash_attention=True)
-
     with open("./result_dump/finfact_claim_new.json", "r") as f:
         dataset = json.load(f)
     f.close()
 
-    ###  intergrate relevance
-    # l2v = LLM2Vec.from_pretrained(
-    #     "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
-    #     peft_model_name_or_path="McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
-    #     device_map="auto",
-    #     torch_dtype=torch.bfloat16
-    # )
-
-    # with open("./finfact_claim_llama3.2_full_0-300.json", "r") as f:
-    #     data1 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_300-1000.json", "r") as f:
-    #     data2 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_1000-3000.json", "r") as f:
-    #     data3 = json.load(f)
-    # f.close()
-
-    # with open("./finfact_claim_llama3.2_full_3000-3369.json", "r") as f:
-    #     data4 = json.load(f)
-    # f.close()
-
-    # dataset = data1 + data2 + data3 + data4
-    # new_data = integrate_relevant_score(dataset, l2v)
-    # with open('./finfact_claim_new.json', 'w', encoding='utf-8') as f:
-    #     json.dump(new_data, f, ensure_ascii=False, indent=4)
-    # f.close()
-
-    # MAIN
-    # train
-    # results = create_verification_prompt(dataset, model, processor, args.path, new_token=20, no_aug=True)
-    # results = create_verification_prompt_vision_text_only(dataset, model, processor, args.path, new_token=20)
-    results = create_verification_prompt_vision_multiimages(dataset, model, processor, args.path, new_token=10, no_aug=False)
-    g, p, new_results = retrieve_verification_results(results)
-
-    with open('./finfact_verification_test_llava13.json', 'w', encoding='utf-8') as f:
-        json.dump(new_results, f, ensure_ascii=False, indent=4)
+    ##  intergrate relevance
+    l2v = LLM2Vec.from_pretrained(
+        "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+        peft_model_name_or_path="McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+        device_map="auto",
+        torch_dtype=torch.bfloat16
+    )
+    
+    new_data = integrate_relevant_score(dataset, l2v)
+    with open('./finfact_claim_new.json', 'w', encoding='utf-8') as f:
+        json.dump(new_data, f, ensure_ascii=False, indent=4)
     f.close()
 
-    # # testing 
-    # with open("./mocheg_verification_test_llama3.1-70B.json", "r") as f:
-    #     results = json.load(f)
-    # f.close()
-    # g, p, new_results = retrieve_verification_results(results)
-
-    print("Test result micro: {}\n".format(f1_score(g, p, average='micro')))
-    print("Test result macro: {}\n".format(f1_score(g, p, average='macro')))
-    print("Test result Accuracy: {}\n".format(accuracy_score(g, p)))
-    print(confusion_matrix(g, p, labels=[0, 1, 2]))
