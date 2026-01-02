@@ -22,7 +22,7 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
         model_max_length=2048,
         padding_side="left",
         truncation_side="left",
-        token="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"
+        token=""
     )
 
     quantization_config = BitsAndBytesConfig(
@@ -40,14 +40,14 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
         model = AutoModelForCausalLM.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         attn_implementation=atten_type,
     )
     else:
         model = AutoModelForCausalLM.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         device_map=device,
         attn_implementation=atten_type,
     )
@@ -58,7 +58,7 @@ def load_peft_model_text(peft_model_name, device="auto", quantile=True, flash_at
 def load_peft_model_vision2(peft_model_name, device="auto", quantile=True, flash_attention=True):
     processor = AutoProcessor.from_pretrained(
         peft_model_name,
-        token="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"
+        token=""
     )
 
     quantization_config = BitsAndBytesConfig(
@@ -75,7 +75,7 @@ def load_peft_model_vision2(peft_model_name, device="auto", quantile=True, flash
         model = LlavaForConditionalGeneration.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
         low_cpu_mem_usage=True, 
@@ -83,7 +83,7 @@ def load_peft_model_vision2(peft_model_name, device="auto", quantile=True, flash
     else:
         model = LlavaForConditionalGeneration.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
         low_cpu_mem_usage=True, 
@@ -95,7 +95,7 @@ def load_peft_model_vision2(peft_model_name, device="auto", quantile=True, flash
 def load_peft_model_vision3(peft_model_name, device="auto", quantile=True, flash_attention=True, image_token="<image>"):
     processor = LlavaNextProcessor.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         padding_side="left",
         image_token=image_token
     )
@@ -115,14 +115,14 @@ def load_peft_model_vision3(peft_model_name, device="auto", quantile=True, flash
         model = LlavaNextForConditionalGeneration.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )
     else:
         model = LlavaNextForConditionalGeneration.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )
@@ -133,7 +133,7 @@ def load_peft_model_vision3(peft_model_name, device="auto", quantile=True, flash
 def load_peft_model_vision4(peft_model_name, device="auto", quantile=True, flash_attention=True, image_token="<image>"):
     processor = AutoProcessor.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         padding_side="left",
         image_token=image_token
     )
@@ -153,14 +153,14 @@ def load_peft_model_vision4(peft_model_name, device="auto", quantile=True, flash
         model = Qwen2VLForConditionalGeneration.from_pretrained(
         peft_model_name,
         quantization_config=quantization_config,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )
     else:
         model = Qwen2VLForConditionalGeneration.from_pretrained(
         peft_model_name,
-        token="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",
+        token="",
         device_map=device,
         use_flash_attention_2=flash_attention,
     )
