@@ -9,6 +9,7 @@ In each dataset, there are three script files in Python code:
 + llms_generate.py: generate the augmentation between image and text evidence. You can re-run this script on our dummy data to generate the new one.
 + llms_verify.py: perform fact-checking by llms based on generated augmentation in evidence according to the M-RAV framework.
 + llms_verify_system.py: perform fact-checking by llms on system-retrieved evidence by M-RAV framework. Only used for Mocheg dataset.
++ llms_add_relevance_score.py: perform add the relevance score by LLM2VEC in M-RAV framework. 
 
 You can refer to the bash script in each dataset to run the code. 
 
