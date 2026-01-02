@@ -12,5 +12,9 @@ In each dataset, there are three script files in Python code:
 
 You can refer to the bash script in each dataset to run the code. 
 
+## Retrieving evidence  
+Please refer to this repo: https://github.com/sonlam1102/multimodal-fact-checking at Task 1 for Evidence retrieval on Mocheg dataset. 
+
+
 ## Publication 
 tba 
