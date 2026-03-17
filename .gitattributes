@@ -1,3 +1,4 @@
-data/factify.zip filter=lfs diff=lfs merge=lfs -text
-data/finfact.zip filter=lfs diff=lfs merge=lfs -text
-data/mocheg.zip filter=lfs diff=lfs merge=lfs -text
+data/alignment/mocheg/*.json filter=lfs diff=lfs merge=lfs -text
+data/alignment/finfact/*.json filter=lfs diff=lfs merge=lfs -text
+data/alignment/factify/*.json filter=lfs diff=lfs merge=lfs -text
+data/sample_results/*.json filter=lfs diff=lfs merge=lfs -text
