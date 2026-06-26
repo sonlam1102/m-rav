@@ -36,3 +36,8 @@ Link to the publication: https://www.sciencedirect.com/science/article/pii/S0306
   abstract = {The rapid spread of multimodal content, combining text and images, has fueled the rise of misleading information online, making multimodal fact-checking increasingly vital. However, large language models (LLMs) often struggle with cross-modality reasoning to verify claims directly. To address this, we introduce M-RAV, a portable multimodal fact-checking framework that enhances LLMs’ reasoning capabilities. M-RAV operates in four key steps: it Multimodally Retrieves relevant evidence, Augments alignment between text and images by explaining their consistency, assigning the relevance score for each evidence explanation, and Verifies claims using this augmented evidence. By clearly explaining the relationship between text and image evidence in a way that guides LLMs, M-RAV significantly improves fact-verification accuracy. Evaluated on three benchmark multimodal fact-checking datasets, M-RAV demonstrates efficiency even in zero-shot settings. In gold-evidence scenarios, M-RAV outperforms state-of-the-art methods by approximately 3% on Mocheg, 5% on Fin-Fact, and delivers competitive results with fine-tuned models on FACTIFY. In system-retrieved evidence scenarios, M-RAV boosts performance by nearly 6% compared to the best existing method, demonstrating its potential for practical, real-world fact-checking systems.}
 }
 ```
+
+## Contributor: 
+Son Thanh Luu - Japan Advanced Institute of Science and Technology (JAIST).    
+Trung Vo - Japan Advanced Institute of Science and Technology (JAIST).  
+Prof. Minh Le Nguyen - Japan Advanced Institute of Science and Technology (JAIST) - Supervisor   
