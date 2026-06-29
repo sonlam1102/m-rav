@@ -41,3 +41,6 @@ Link to the publication: https://www.sciencedirect.com/science/article/pii/S0306
 Son Thanh Luu - Japan Advanced Institute of Science and Technology (JAIST).    
 Trung Vo - Japan Advanced Institute of Science and Technology (JAIST).  
 Prof. Minh Le Nguyen - Japan Advanced Institute of Science and Technology (JAIST) - Supervisor   
+
+## Contact 
+Mr. Son Luu (sonlt@uit.edu.vn or son.lt1103@gmail.com)  
